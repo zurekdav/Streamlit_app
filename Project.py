@@ -302,7 +302,7 @@ if st.session_state.df is not None:
                     for col in formula_columns:
                         if col not in base_columns:
                             st.error(f"❌ Sloupec '{col}' neexistuje v databázi. Dostupné sloupce jsou: {', '.join(base_columns.keys())}")
-                            break
+                            st.stop()
                         eval_mapping[col] = base_columns[col]
                     else:
                         # When adding a new state, remove any states after the current one
@@ -676,53 +676,55 @@ if all_vars:
     functional_relation = st.text_input("Zadejte funkční závislost (např. *s/t*):")
     if st.button("Vyhodnotit", key="calculate_indirect"):
         try:
+            # Extract variables from the functional relation
+            # Extract variable names (only letters, no numbers)
+            used_vars = set(re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', functional_relation))
+            
+            # Filter out only variables that are actually defined
+            defined_vars = [var for var in used_vars if var in st.session_state.var_values]
+            
+            if not defined_vars:
+                st.error("❌ Žádné definované proměnné nebyly nalezeny ve funkčním vztahu.")
+                st.stop()
+                
+            if len(used_vars) != len(defined_vars):
+                undefined_vars = used_vars - set(defined_vars)
+                st.error(f"❌ Následující proměnné nejsou definovány: {', '.join(undefined_vars)}")
+                st.stop()
+            
             # Create symbols for variables
-            variables = list(st.session_state.var_values.keys())
-            # Create a mapping of variable names to single-letter symbols
-            symbol_mapping = {var: chr(ord('a') + i) for i, var in enumerate(variables)}
-            # Create the reverse mapping for substitution
-            reverse_mapping = {v: k for k, v in symbol_mapping.items()}
+            symbol_mapping = {var: sp.Symbol(var) for var in defined_vars}
             
             # Create the functional relationship with pi and ee
             expr = functional_relation.replace('pi', '3.141592653589793').replace('ee', '2.718281828459045')
             
-            # Replace variable names with single-letter symbols
-            for var in variables:
-                expr = expr.replace(var, symbol_mapping[var])
-            
-            # Create symbols and parse expression
-            if len(variables) == 1:
-                symbols = sp.symbols(symbol_mapping[variables[0]])
-                symbols_dict = {symbol_mapping[variables[0]]: symbols}
-            else:
-                symbols = sp.symbols(' '.join(symbol_mapping.values()))
-                symbols_dict = dict(zip(symbol_mapping.values(), symbols))
-            f = parse_expr(expr)
+            # Parse expression
+            f = parse_expr(expr, local_dict=symbol_mapping)
             
             # Calculate mean value
-            values_dict = {symbol_mapping[var]: v['mean'] for var, v in st.session_state.var_values.items()}
+            values_dict = {var: v['mean'] for var, v in st.session_state.var_values.items() if var in defined_vars}
             f_mean = f.subs(values_dict).evalf()
             
             # Calculate derivatives and errors
-            derivatives = [sp.diff(f, symbols_dict[symbol_mapping[var]]) for var in variables]
+            derivatives = [sp.diff(f, symbol_mapping[var]) for var in defined_vars]
             evaluated_derivatives = [d.subs(values_dict).evalf() for d in derivatives]
             
             # Calculate indirect error
             indirect_error = sum([(st.session_state.var_values[var]['error'] * deriv) ** 2 
-                                for var, deriv in zip(variables, evaluated_derivatives)]) ** 0.5
+                                for var, deriv in zip(defined_vars, evaluated_derivatives)]) ** 0.5
             
             # Display the error calculation formula
             st.markdown("**Vzorec pro výpočet chyby:**")
             # Create a new expression for LaTeX display using original variable names
             latex_expr = functional_relation.replace('pi', 'π').replace('ee', 'e')
             # Create symbols for the variables
-            sym_vars = {var: sp.Symbol(var) for var in variables}
+            sym_vars = {var: sp.Symbol(var) for var in defined_vars}
             # Parse the expression
             expr = parse_expr(latex_expr, local_dict=sym_vars)
             # Calculate partial derivatives
-            derivatives = {var: sp.diff(expr, sym_vars[var]) for var in variables}
+            derivatives = {var: sp.diff(expr, sym_vars[var]) for var in defined_vars}
             # Create the error formula
-            error_terms = [f"({sp.latex(derivatives[var])} \cdot σ_{{{var}}})^2" for var in variables]
+            error_terms = [f"({sp.latex(derivatives[var])} \cdot σ_{{{var}}})^2" for var in defined_vars]
             error_formula = f"σ_{{{quant_name}}} = \sqrt{{" + " + ".join(error_terms) + "}"
             st.latex(error_formula)
             
