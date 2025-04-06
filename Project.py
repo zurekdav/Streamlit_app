@@ -7,43 +7,80 @@ import re
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from io import BytesIO, StringIO
+import logging
 
-st.set_page_config(page_title="Analýza měření", layout="wide")
-st.title("Analýza měření")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Initialize session state
-if 'df' not in st.session_state:
-    st.session_state.df = None
-if 'file_name' not in st.session_state:
-    st.session_state.file_name = None
-if 'statistics_results' not in st.session_state:
-    st.session_state.statistics_results = []
-if 'indirect_results' not in st.session_state:
-    st.session_state.indirect_results = []
-if 'custom_vars' not in st.session_state:
-    st.session_state.custom_vars = []
-if 'var_values' not in st.session_state:
-    st.session_state.var_values = {}
-if 'df_history' not in st.session_state:
-    st.session_state.df_history = []
-if 'current_state_index' not in st.session_state:
-    st.session_state.current_state_index = 0
-if 'last_operation' not in st.session_state:
-    st.session_state.last_operation = None
+def check_session_state_consistency():
+    """Kontrola konzistence session state"""
+    required_keys = {
+        'df': None,
+        'file_name': None,
+        'statistics_results': [],
+        'indirect_results': [],
+        'custom_vars': [],
+        'var_values': {},
+        'df_history': [],
+        'current_state_index': -1
+    }
+    
+    # Kontrola chybějících klíčů
+    missing_keys = [key for key in required_keys if key not in st.session_state]
+    if missing_keys:
+        logger.warning(f"Chybějící klíče v session state: {missing_keys}")
+        for key in missing_keys:
+            st.session_state[key] = required_keys[key]
+    
+    # Kontrola konzistence historie
+    if st.session_state.df_history and st.session_state.current_state_index >= 0:
+        if st.session_state.current_state_index >= len(st.session_state.df_history):
+            logger.warning("Aktuální index je mimo rozsah historie, resetuji na poslední platný stav")
+            st.session_state.current_state_index = len(st.session_state.df_history) - 1
+            st.session_state.df = st.session_state.df_history[-1].copy()
+        elif not st.session_state.df.equals(st.session_state.df_history[st.session_state.current_state_index]):
+            logger.warning("Data neodpovídají aktuálnímu stavu v historii, opravuji")
+            st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
 
-# Function to update session state
-def update_session_state(new_df, operation_name):
-    if st.session_state.df is not None:
-        # When adding a new state, remove any states after the current one
+def add_to_history(new_df):
+    """Přidá nový stav do historie"""
+    # Check if data actually changed
+    if st.session_state.df is None or not new_df.equals(st.session_state.df):
+        logger.info(f"Přidávám nový stav do historie (index: {st.session_state.current_state_index + 1})")
+        
+        # Remove states after current index
         if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+            removed_states = len(st.session_state.df_history) - (st.session_state.current_state_index + 1)
+            logger.info(f"Odstraňuji {removed_states} stavů z historie")
             st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
         
-        # Add the new state and update the index
+        # Add new state
         st.session_state.df_history.append(new_df.copy())
         st.session_state.current_state_index += 1
         st.session_state.df = new_df
-        st.session_state.last_operation = operation_name
-        st.rerun()
+        logger.info(f"Nový stav úspěšně přidán (celkem stavů: {len(st.session_state.df_history)})")
+    else:
+        logger.info("Data se nezměnila, historie nebyla aktualizována")
+
+# Initialize session state
+if 'initialized' not in st.session_state:
+    logger.info("Inicializace session state")
+    st.session_state.df = None
+    st.session_state.file_name = None
+    st.session_state.statistics_results = []
+    st.session_state.indirect_results = []
+    st.session_state.custom_vars = []
+    st.session_state.var_values = {}
+    st.session_state.df_history = []
+    st.session_state.current_state_index = -1
+    st.session_state.initialized = True
+
+# Check session state consistency
+check_session_state_consistency()
+
+st.set_page_config(page_title="Analýza měření", layout="wide")
+st.title("Analýza měření")
 
 # Nahrání dat
 st.header("Nahrání dat")
@@ -97,25 +134,27 @@ with tab2:
 # Process uploaded file if any
 if uploaded_file is not None:
     try:
-        # Only update data if a new file is uploaded
-        if uploaded_file.name != st.session_state.file_name:
-            # Read the file based on its type
+        # Reset state only if file changed
+        if uploaded_file.name != st.session_state.get('file_name'):
             if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                st.session_state.df = pd.read_excel(uploaded_file)
-                st.session_state.df = st.session_state.df.replace(',', '.', regex=True)
-                st.session_state.df = st.session_state.df.apply(pd.to_numeric, errors='coerce')
+                df = pd.read_excel(uploaded_file)
             else:
-                st.session_state.df = pd.read_csv(uploaded_file)
-            st.session_state.file_name = uploaded_file.name
-            st.session_state.statistics_results = []
+                df = pd.read_csv(uploaded_file)
             
-            # Reset history with the original state
-            st.session_state.df_history = [st.session_state.df.copy()]
+            # Normalize data
+            df = df.replace(',', '.', regex=True)
+            df = df.apply(pd.to_numeric, errors='coerce')
+            
+            # Update session_state
+            st.session_state.df = df
+            st.session_state.file_name = uploaded_file.name
+            st.session_state.df_history = [df.copy()]
             st.session_state.current_state_index = 0
+            st.rerun()  # Force re-render
     except Exception as e:
         st.error(f"Chyba při čtení souboru: {str(e)}")
 
-# Display data and editing options if we have data (either from file or clipboard)
+# Display data and editing options if we have data
 if st.session_state.df is not None:
     # Display the data
     st.subheader("Nahraná data")
@@ -123,13 +162,10 @@ if st.session_state.df is not None:
     
     # Undo functionality
     if st.button("↩️ Vrátit poslední změnu"):
-        try:
-            if st.session_state.current_state_index > 0:
-                st.session_state.current_state_index -= 1
-                st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
-                st.rerun()
-        except Exception as e:
-            st.error(f"Chyba při vracení změny: {str(e)}")
+        if st.session_state.current_state_index > 0:
+            st.session_state.current_state_index -= 1
+            st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
+            st.rerun()
     
     # Row and Column deletion sections
     st.subheader("🗑️ Vymazání řádků a sloupců")
@@ -143,12 +179,20 @@ if st.session_state.df is not None:
                     """)
         row_to_delete = st.number_input("Zadejte index řádku k odstranění:", min_value=0, max_value=len(st.session_state.df)-1, value=0)
         if st.button("Odstranit řádek"):
-            try:
-                modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
-                update_session_state(modified_df, "row_deletion")
-                st.success(f"Řádek {row_to_delete} byl odstraněn!")
-            except Exception as e:
-                st.error(f"Chyba při mazání řádku: {str(e)}")
+            # When adding a new state, remove any states after the current one (if user had gone back in history)
+            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+            
+            # Apply the change
+            modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
+            
+            # Add the new state and update the index
+            st.session_state.df_history.append(modified_df.copy())
+            st.session_state.current_state_index += 1
+            st.session_state.df = modified_df
+            
+            data_display.dataframe(st.session_state.df)
+            st.success(f"Řádek {row_to_delete} byl odstraněn!")
     
     with col2:
         st.markdown("**Vymazání sloupce**")
@@ -158,12 +202,20 @@ if st.session_state.df is not None:
                     """)
         col_to_delete = st.selectbox("Zvolte sloupec k odstranění:", st.session_state.df.columns, key="delete_column")
         if st.button("Odstranit sloupec"):
-            try:
-                modified_df = st.session_state.df.drop(columns=[col_to_delete])
-                update_session_state(modified_df, "column_deletion")
-                st.success(f"Sloupec {col_to_delete} byl odstraněn!")
-            except Exception as e:
-                st.error(f"Chyba při mazání sloupce: {str(e)}")
+            # When adding a new state, remove any states after the current one (if user had gone back in history)
+            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+            
+            # Apply the change
+            modified_df = st.session_state.df.drop(columns=[col_to_delete])
+            
+            # Add the new state and update the index
+            st.session_state.df_history.append(modified_df.copy())
+            st.session_state.current_state_index += 1
+            st.session_state.df = modified_df
+            
+            data_display.dataframe(st.session_state.df)
+            st.success(f"Sloupec {col_to_delete} byl odstraněn!")
     
     # Column multiplication section
     st.subheader("Sekce pro převod jednotek a přejmenování sloupců")
