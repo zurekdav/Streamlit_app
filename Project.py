@@ -28,6 +28,22 @@ if 'df_history' not in st.session_state:
     st.session_state.df_history = []
 if 'current_state_index' not in st.session_state:
     st.session_state.current_state_index = 0
+if 'last_operation' not in st.session_state:
+    st.session_state.last_operation = None
+
+# Function to update session state
+def update_session_state(new_df, operation_name):
+    if st.session_state.df is not None:
+        # When adding a new state, remove any states after the current one
+        if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+            st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+        
+        # Add the new state and update the index
+        st.session_state.df_history.append(new_df.copy())
+        st.session_state.current_state_index += 1
+        st.session_state.df = new_df
+        st.session_state.last_operation = operation_name
+        st.rerun()
 
 # Nahrání dat
 st.header("Nahrání dat")
@@ -105,19 +121,15 @@ if st.session_state.df is not None:
     st.subheader("Nahraná data")
     data_display = st.dataframe(st.session_state.df)
     
-    # Undo functionality - always show the button
+    # Undo functionality
     if st.button("↩️ Vrátit poslední změnu"):
         try:
-            # Try to undo the last change
             if st.session_state.current_state_index > 0:
                 st.session_state.current_state_index -= 1
                 st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
                 st.rerun()
-        except (IndexError, ValueError):
-            # If there's an error, reset to initial state
-            st.session_state.current_state_index = 0
-            st.session_state.df = st.session_state.df_history[0].copy()
-            st.rerun()
+        except Exception as e:
+            st.error(f"Chyba při vracení změny: {str(e)}")
     
     # Row and Column deletion sections
     st.subheader("🗑️ Vymazání řádků a sloupců")
@@ -131,20 +143,12 @@ if st.session_state.df is not None:
                     """)
         row_to_delete = st.number_input("Zadejte index řádku k odstranění:", min_value=0, max_value=len(st.session_state.df)-1, value=0)
         if st.button("Odstranit řádek"):
-            # When adding a new state, remove any states after the current one (if user had gone back in history)
-            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-            
-            # Apply the change
-            modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
-            
-            # Add the new state and update the index
-            st.session_state.df_history.append(modified_df.copy())
-            st.session_state.current_state_index += 1
-            st.session_state.df = modified_df
-            
-            data_display.dataframe(st.session_state.df)
-            st.success(f"Řádek {row_to_delete} byl odstraněn!")
+            try:
+                modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
+                update_session_state(modified_df, "row_deletion")
+                st.success(f"Řádek {row_to_delete} byl odstraněn!")
+            except Exception as e:
+                st.error(f"Chyba při mazání řádku: {str(e)}")
     
     with col2:
         st.markdown("**Vymazání sloupce**")
@@ -154,20 +158,12 @@ if st.session_state.df is not None:
                     """)
         col_to_delete = st.selectbox("Zvolte sloupec k odstranění:", st.session_state.df.columns, key="delete_column")
         if st.button("Odstranit sloupec"):
-            # When adding a new state, remove any states after the current one (if user had gone back in history)
-            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-            
-            # Apply the change
-            modified_df = st.session_state.df.drop(columns=[col_to_delete])
-            
-            # Add the new state and update the index
-            st.session_state.df_history.append(modified_df.copy())
-            st.session_state.current_state_index += 1
-            st.session_state.df = modified_df
-            
-            data_display.dataframe(st.session_state.df)
-            st.success(f"Sloupec {col_to_delete} byl odstraněn!")
+            try:
+                modified_df = st.session_state.df.drop(columns=[col_to_delete])
+                update_session_state(modified_df, "column_deletion")
+                st.success(f"Sloupec {col_to_delete} byl odstraněn!")
+            except Exception as e:
+                st.error(f"Chyba při mazání sloupce: {str(e)}")
     
     # Column multiplication section
     st.subheader("Sekce pro převod jednotek a přejmenování sloupců")
