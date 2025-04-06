@@ -597,7 +597,7 @@ if st.session_state.df is not None:
 st.divider()
 st.subheader("Nepřímé měření")
 st.markdown("""
-            - Pro zpracování nepřímo měřené veličiny můžete použít výsledky získané v kroku 'přímé měření' nebo zadat nové hodnoty.
+            - Pro zpracování nepřímo měřené veličiny můžete použít výsledky získané v předchozím kroku nebo zadat nové hodnoty.
             """)
 
 # Create list of available variables
@@ -715,9 +715,16 @@ if all_vars:
             st.markdown("**Vzorec pro výpočet chyby:**")
             # Create a new expression for LaTeX display using original variable names
             latex_expr = functional_relation.replace('pi', 'π').replace('ee', 'e')
-            error_formula = sp.sqrt(sum([sp.Symbol(f"σ_{{{var}}}")**2 * sp.diff(parse_expr(latex_expr), sp.Symbol(var))**2 
-                                       for var in variables]))
-            st.latex(f"σ_{{{quant_name}}} = {sp.latex(error_formula)}")
+            # Create symbols for the variables
+            sym_vars = {var: sp.Symbol(var) for var in variables}
+            # Parse the expression
+            expr = parse_expr(latex_expr, local_dict=sym_vars)
+            # Calculate partial derivatives
+            derivatives = {var: sp.diff(expr, sym_vars[var]) for var in variables}
+            # Create the error formula
+            error_terms = [f"({sp.latex(derivatives[var])} \cdot σ_{{{var}}})^2" for var in variables]
+            error_formula = f"σ_{{{quant_name}}} = \sqrt{{" + " + ".join(error_terms) + "}"
+            st.latex(error_formula)
             
             result = {
                 'name': quant_name,
