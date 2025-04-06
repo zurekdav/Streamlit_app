@@ -7,74 +7,29 @@ import re
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from io import BytesIO, StringIO
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def check_session_state_consistency():
-    """Kontrola konzistence session state"""
-    required_keys = {
-        'df': None,
-        'file_name': None,
-        'statistics_results': [],
-        'indirect_results': [],
-        'custom_vars': [],
-        'var_values': {},
-        'df_history': [],
-        'current_state_index': -1
-    }
-    
-    # Kontrola chybějících klíčů
-    missing_keys = [key for key in required_keys if key not in st.session_state]
-    if missing_keys:
-        logger.warning(f"Chybějící klíče v session state: {missing_keys}")
-        for key in missing_keys:
-            st.session_state[key] = required_keys[key]
-    
-    # Kontrola konzistence historie
-    if st.session_state.df_history and st.session_state.current_state_index >= 0:
-        if st.session_state.current_state_index >= len(st.session_state.df_history):
-            logger.warning("Aktuální index je mimo rozsah historie, resetuji na poslední platný stav")
-            st.session_state.current_state_index = len(st.session_state.df_history) - 1
-            st.session_state.df = st.session_state.df_history[-1].copy()
-        elif not st.session_state.df.equals(st.session_state.df_history[st.session_state.current_state_index]):
-            logger.warning("Data neodpovídají aktuálnímu stavu v historii, opravuji")
-            st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
-
-def add_to_history(new_df):
-    """Přidá nový stav do historie"""
-    # Check if data actually changed
-    if st.session_state.df is None or not new_df.equals(st.session_state.df):
-        # Remove states after current index
-        if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-            st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-        
-        # Add new state
-        st.session_state.df_history.append(new_df.copy())
-        st.session_state.current_state_index += 1
-        st.session_state.df = new_df.copy()
-        st.rerun()
-
-# Initialize session state
-if 'initialized' not in st.session_state:
-    logger.info("Inicializace session state")
-    st.session_state.df = None
-    st.session_state.file_name = None
-    st.session_state.statistics_results = []
-    st.session_state.indirect_results = []
-    st.session_state.custom_vars = []
-    st.session_state.var_values = {}
-    st.session_state.df_history = []
-    st.session_state.current_state_index = -1
-    st.session_state.initialized = True
-
-# Check session state consistency
-check_session_state_consistency()
 
 st.set_page_config(page_title="Analýza měření", layout="wide")
 st.title("Analýza měření")
+
+# Initialize session state
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'file_name' not in st.session_state:
+    st.session_state.file_name = None
+if 'statistics_results' not in st.session_state:
+    st.session_state.statistics_results = []
+if 'indirect_results' not in st.session_state:
+    st.session_state.indirect_results = []
+if 'custom_vars' not in st.session_state:
+    st.session_state.custom_vars = []
+if 'var_values' not in st.session_state:
+    st.session_state.var_values = {}
+if 'df_history' not in st.session_state:
+    st.session_state.df_history = []
+if 'current_state_index' not in st.session_state:
+    st.session_state.current_state_index = 0
+if 'last_pasted_data' not in st.session_state:
+    st.session_state.last_pasted_data = ''
 
 # Nahrání dat
 st.header("Nahrání dat")
@@ -102,68 +57,71 @@ with tab2:
     pasted_data = st.text_area("Vložte data ze schránky:", height=200)
     if pasted_data:
         try:
-            # Try to read the data with different separators
-            try:
-                # First try with tab separator
-                df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep='\t', na_values=[''])
-            except:
-                # If that fails, try with comma separator
-                df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=',', na_values=[''])
-            
-            # Convert to numeric and handle decimal points
-            df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
-            df_from_clipboard = df_from_clipboard.apply(pd.to_numeric, errors='coerce')
-            
-            # Reset session state
-            st.session_state.df = df_from_clipboard.copy()
-            st.session_state.file_name = "pasted_data"
-            st.session_state.statistics_results = []
-            st.session_state.indirect_results = []
-            st.session_state.custom_vars = []
-            st.session_state.var_values = {}
-            st.session_state.df_history = [df_from_clipboard.copy()]
-            st.session_state.current_state_index = 0
-            st.rerun()
+            # Only process if the data is different from current state
+            if pasted_data != st.session_state.get('last_pasted_data', ''):
+                # Try to read the data with different separators
+                try:
+                    # First try with tab separator
+                    df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep='\t', na_values=[''])
+                except:
+                    # If that fails, try with comma separator
+                    df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=',', na_values=[''])
+                
+                # Convert to numeric and handle decimal points
+                df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
+                df_from_clipboard = df_from_clipboard.apply(pd.to_numeric, errors='coerce')
+                
+                # Set the data in session state
+                st.session_state.df = df_from_clipboard
+                st.session_state.file_name = "pasted_data"
+                st.session_state.statistics_results = []
+                st.session_state.df_history = [st.session_state.df.copy()]
+                st.session_state.current_state_index = 0
+                st.session_state.last_pasted_data = pasted_data
+                
+                st.success("Data byla úspěšně načtena!")
         except Exception as e:
             st.error(f"Chyba při načítání dat: {str(e)}")
 
 # Process uploaded file if any
 if uploaded_file is not None:
     try:
-        # Always reset state when a new file is uploaded
-        if uploaded_file.name.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(uploaded_file, engine='openpyxl')
-        else:
-            df = pd.read_csv(uploaded_file)
-        
-        # Normalize data
-        df = df.replace(',', '.', regex=True)
-        df = df.apply(pd.to_numeric, errors='coerce')
-        
-        # Reset session state
-        st.session_state.df = df.copy()
-        st.session_state.file_name = uploaded_file.name
-        st.session_state.statistics_results = []
-        st.session_state.indirect_results = []
-        st.session_state.custom_vars = []
-        st.session_state.var_values = {}
-        st.session_state.df_history = [df.copy()]
-        st.session_state.current_state_index = 0
-        st.rerun()
+        # Only update data if a new file is uploaded
+        if uploaded_file.name != st.session_state.file_name:
+            # Read the file based on its type
+            if uploaded_file.name.endswith(('.xlsx', '.xls')):
+                st.session_state.df = pd.read_excel(uploaded_file)
+                st.session_state.df = st.session_state.df.replace(',', '.', regex=True)
+                st.session_state.df = st.session_state.df.apply(pd.to_numeric, errors='coerce')
+            else:
+                st.session_state.df = pd.read_csv(uploaded_file)
+            st.session_state.file_name = uploaded_file.name
+            st.session_state.statistics_results = []
+            
+            # Reset history with the original state
+            st.session_state.df_history = [st.session_state.df.copy()]
+            st.session_state.current_state_index = 0
     except Exception as e:
         st.error(f"Chyba při čtení souboru: {str(e)}")
 
-# Display data and editing options if we have data
+# Display data and editing options if we have data (either from file or clipboard)
 if st.session_state.df is not None:
     # Display the data
     st.subheader("Nahraná data")
     data_display = st.dataframe(st.session_state.df)
     
-    # Undo functionality
+    # Undo functionality - always show the button
     if st.button("↩️ Vrátit poslední změnu"):
-        if st.session_state.current_state_index > 0:
-            st.session_state.current_state_index -= 1
-            st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
+        try:
+            # Try to undo the last change
+            if st.session_state.current_state_index > 0:
+                st.session_state.current_state_index -= 1
+                st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
+                st.rerun()
+        except (IndexError, ValueError):
+            # If there's an error, reset to initial state
+            st.session_state.current_state_index = 0
+            st.session_state.df = st.session_state.df_history[0].copy()
             st.rerun()
     
     # Row and Column deletion sections
