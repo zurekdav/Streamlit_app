@@ -720,52 +720,117 @@ if all_vars:
             # Create symbols for variables
             symbol_mapping = {var: sp.Symbol(var) for var in defined_vars}
             
-            # Create the functional relationship with pi and ee
-            expr = functional_relation.replace('pi', '3.141592653589793').replace('ee', '2.718281828459045')
-            
-            # Parse expression with allowed functions
-            f = parse_expr(expr, local_dict={**symbol_mapping, **allowed_sympy_functions})
-            
-            # Calculate mean value
-            values_dict = {var: v['mean'] for var, v in st.session_state.var_values.items() if var in defined_vars}
-            f_mean = f.subs(values_dict).evalf()
-            
-            # Calculate derivatives and errors
-            derivatives = [sp.diff(f, symbol_mapping[var]) for var in defined_vars]
-            evaluated_derivatives = [d.subs(values_dict).evalf() for d in derivatives]
-            
-            # Calculate indirect error
-            indirect_error = sum([(st.session_state.var_values[var]['error'] * deriv) ** 2 
-                                for var, deriv in zip(defined_vars, evaluated_derivatives)]) ** 0.5
-            
-            # Display the error calculation formula
-            st.markdown("**Vzorec pro výpočet chyby:**")
-            # Create a new expression for LaTeX display using original variable names
-            latex_expr = functional_relation.replace('pi', 'π').replace('ee', 'e')
-            # Create symbols for the variables
-            sym_vars = {var: sp.Symbol(var) for var in defined_vars}
-            # Parse the expression
-            expr = parse_expr(latex_expr, local_dict=sym_vars)
-            # Calculate partial derivatives
-            derivatives = {var: sp.diff(expr, sym_vars[var]) for var in defined_vars}
-            # Create the error formula
-            error_terms = [f"({sp.latex(derivatives[var])} \cdot σ_{{{var}}})^2" for var in defined_vars]
-            error_formula = f"σ_{{{quant_name}}} = \sqrt{{" + " + ".join(error_terms) + "}"
-            st.latex(error_formula)
-            
-            result = {
-                'name': quant_name,
-                'mean': float(f_mean),
-                'error': float(indirect_error)
-            }
-            
-            existing_indices = [i for i, r in enumerate(st.session_state.indirect_results) 
-                             if r['name'] == quant_name]
-            if existing_indices:
-                st.session_state.indirect_results[existing_indices[0]] = result
-            else:
-                st.session_state.indirect_results.append(result)
+            try:
+                # Create the functional relationship
+                # Use a safer approach with explicit sympy parsing
+                expr_text = functional_relation
                 
+                # Replace with safer explicit substitutions
+                for func_name, func in allowed_sympy_functions.items():
+                    if func_name in expr_text and func_name not in ['pi', 'ee']:
+                        # Handle special cases for constants
+                        continue
+                
+                # Parse expression with allowed functions - with better error handling
+                try:
+                    f = parse_expr(expr_text, local_dict={**symbol_mapping, **allowed_sympy_functions}, transformations='all')
+                except Exception as parse_error:
+                    st.error(f"❌ Chyba při analýze výrazu: {str(parse_error)}")
+                    st.error("Ujistěte se, že používáte platnou syntaxi a závorky jsou správně uzavřeny.")
+                    st.stop()
+                
+                # Calculate mean value with better error handling
+                try:
+                    values_dict = {var: v['mean'] for var, v in st.session_state.var_values.items() if var in defined_vars}
+                    f_mean = f.subs(values_dict).evalf()
+                except Exception as eval_error:
+                    st.error(f"❌ Chyba při výpočtu střední hodnoty: {str(eval_error)}")
+                    st.stop()
+                
+                # Calculate derivatives and errors with better error handling
+                try:
+                    derivatives = []
+                    evaluated_derivatives = []
+                    for var in defined_vars:
+                        try:
+                            derivative = sp.diff(f, symbol_mapping[var])
+                            evaluated_derivative = derivative.subs(values_dict).evalf()
+                            derivatives.append(derivative)
+                            evaluated_derivatives.append(evaluated_derivative)
+                        except Exception as diff_error:
+                            st.warning(f"Varování: Chyba při výpočtu derivace podle {var}: {str(diff_error)}")
+                            derivatives.append(sp.sympify(0))
+                            evaluated_derivatives.append(0)
+                except Exception as deriv_error:
+                    st.error(f"❌ Chyba při výpočtu derivací: {str(deriv_error)}")
+                    st.stop()
+                
+                # Calculate indirect error
+                indirect_error = sum([(st.session_state.var_values[var]['error'] * deriv) ** 2 
+                                    for var, deriv in zip(defined_vars, evaluated_derivatives)]) ** 0.5
+                
+                # Display the error calculation formula
+                st.markdown("**Vzorec pro výpočet chyby:**")
+                
+                # Use a safer approach for LaTeX rendering
+                try:
+                    latex_expr = functional_relation
+                    # Create symbols for the variables with better approach
+                    sym_vars = {var: sp.Symbol(var) for var in defined_vars}
+                    
+                    # Parse the expression for LaTeX display
+                    try:
+                        expr = parse_expr(latex_expr, local_dict={**sym_vars, **allowed_sympy_functions}, transformations='all')
+                    except:
+                        # Fallback if the parse fails for LaTeX
+                        expr = f
+                    
+                    # Create the error formula with safer approach
+                    try:
+                        error_terms = []
+                        for var in defined_vars:
+                            try:
+                                derivative = sp.diff(expr, sym_vars[var])
+                                error_terms.append(f"({sp.latex(derivative)} \\cdot σ_{{{var}}})^2")
+                            except:
+                                error_terms.append(f"(\\frac{{∂f}}{{∂{var}}} \\cdot σ_{{{var}}})^2")
+                        
+                        error_formula = f"σ_{{{quant_name}}} = \\sqrt{{" + " + ".join(error_terms) + "}"
+                        st.latex(error_formula)
+                    except Exception as latex_error:
+                        # Simplified fallback for error formula
+                        st.markdown(f"Chyba při zobrazení vzorce: {str(latex_error)}")
+                        st.markdown("Obecný vzorec pro chybu nepřímého měření: σ_f = √[Σ(∂f/∂x_i · σ_i)²]")
+                except Exception as formula_error:
+                    st.warning(f"Varování: Nelze vykreslit vzorec: {str(formula_error)}")
+                
+                # Create the result with appropriate handling of complex numbers
+                try:
+                    mean_value = complex(f_mean)
+                    if mean_value.imag == 0:
+                        result_mean = float(mean_value.real)
+                    else:
+                        st.warning("Výsledek obsahuje komplexní čísla. Zobrazuje se pouze reálná část.")
+                        result_mean = float(mean_value.real)
+                except:
+                    # Fallback for non-numeric results
+                    result_mean = float(f_mean)
+                
+                result = {
+                    'name': quant_name,
+                    'mean': result_mean,
+                    'error': float(indirect_error)
+                }
+                
+                existing_indices = [i for i, r in enumerate(st.session_state.indirect_results) 
+                                if r['name'] == quant_name]
+                if existing_indices:
+                    st.session_state.indirect_results[existing_indices[0]] = result
+                else:
+                    st.session_state.indirect_results.append(result)
+            except Exception as e:
+                st.error(f"❌ Chyba v výpočtu: {str(e)}")
+                st.error("Prosím, zkontrolujte, zda jsou všechny proměnné definovány a vzorec je správný.")
         except Exception as e:
             st.error(f"Chyba v výpočtu: {str(e)}")
             st.error("Prosím, zkontrolujte, zda jsou všechny proměnné definovány a vzorec je správný.")
