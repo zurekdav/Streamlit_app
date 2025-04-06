@@ -47,21 +47,15 @@ def add_to_history(new_df):
     """Přidá nový stav do historie"""
     # Check if data actually changed
     if st.session_state.df is None or not new_df.equals(st.session_state.df):
-        logger.info(f"Přidávám nový stav do historie (index: {st.session_state.current_state_index + 1})")
-        
         # Remove states after current index
         if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-            removed_states = len(st.session_state.df_history) - (st.session_state.current_state_index + 1)
-            logger.info(f"Odstraňuji {removed_states} stavů z historie")
             st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
         
         # Add new state
         st.session_state.df_history.append(new_df.copy())
         st.session_state.current_state_index += 1
-        st.session_state.df = new_df
-        logger.info(f"Nový stav úspěšně přidán (celkem stavů: {len(st.session_state.df_history)})")
-    else:
-        logger.info("Data se nezměnila, historie nebyla aktualizována")
+        st.session_state.df = new_df.copy()  # Make sure to create a new copy
+        st.rerun()  # Force Streamlit to rerun with new data
 
 # Initialize session state
 if 'initialized' not in st.session_state:
@@ -137,7 +131,7 @@ if uploaded_file is not None:
         # Reset state only if file changed
         if uploaded_file.name != st.session_state.get('file_name'):
             if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(uploaded_file)
+                df = pd.read_excel(uploaded_file, engine='openpyxl')
             else:
                 df = pd.read_csv(uploaded_file)
             
@@ -146,11 +140,11 @@ if uploaded_file is not None:
             df = df.apply(pd.to_numeric, errors='coerce')
             
             # Update session_state
-            st.session_state.df = df
+            st.session_state.df = df.copy()  # Make sure to create a new copy
             st.session_state.file_name = uploaded_file.name
             st.session_state.df_history = [df.copy()]
             st.session_state.current_state_index = 0
-            st.rerun()  # Force re-render
+            st.rerun()  # Force Streamlit to rerun with new data
     except Exception as e:
         st.error(f"Chyba při čtení souboru: {str(e)}")
 
@@ -165,7 +159,7 @@ if st.session_state.df is not None:
         if st.session_state.current_state_index > 0:
             st.session_state.current_state_index -= 1
             st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
-            st.rerun()
+            st.rerun()  # Force Streamlit to rerun with new data
     
     # Row and Column deletion sections
     st.subheader("🗑️ Vymazání řádků a sloupců")
