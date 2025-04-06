@@ -597,7 +597,7 @@ if st.session_state.df is not None:
 st.divider()
 st.subheader("Nepřímé měření")
 st.markdown("""
-            - Pro zpracování nepřímo měřené veličiny můžete použít výsledky získané v předchozím kroku nebo zadat nové hodnoty.
+            - Pro zpracování nepřímo měřené veličiny můžete použít výsledky získané v kroku 'přímé měření' nebo zadat nové hodnoty.
             """)
 
 # Create list of available variables
