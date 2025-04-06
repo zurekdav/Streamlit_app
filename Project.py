@@ -676,9 +676,34 @@ if all_vars:
     functional_relation = st.text_input("Zadejte funkční závislost (např. *s/t*):")
     if st.button("Vyhodnotit", key="calculate_indirect"):
         try:
+            # Define allowed functions for sympy
+            allowed_sympy_functions = {
+                'exp': sp.exp,
+                'sin': sp.sin,
+                'cos': sp.cos,
+                'tan': sp.tan,
+                'asin': sp.asin,
+                'acos': sp.acos,
+                'atan': sp.atan,
+                'sinh': sp.sinh,
+                'cosh': sp.cosh,
+                'tanh': sp.tanh,
+                'asinh': sp.asinh,
+                'acosh': sp.acosh,
+                'atanh': sp.atanh,
+                'log': sp.log,
+                'sqrt': sp.sqrt,
+                'abs': sp.Abs,
+                'pi': sp.pi,
+                'ee': sp.E
+            }
+            
             # Extract variables from the functional relation
-            # Extract variable names (only letters, no numbers)
-            used_vars = set(re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', functional_relation))
+            # Extract all identifiers (words)
+            all_identifiers = set(re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', functional_relation))
+            
+            # Remove function names from the list of variables
+            used_vars = all_identifiers - set(allowed_sympy_functions.keys())
             
             # Filter out only variables that are actually defined
             defined_vars = [var for var in used_vars if var in st.session_state.var_values]
@@ -698,8 +723,8 @@ if all_vars:
             # Create the functional relationship with pi and ee
             expr = functional_relation.replace('pi', '3.141592653589793').replace('ee', '2.718281828459045')
             
-            # Parse expression
-            f = parse_expr(expr, local_dict=symbol_mapping)
+            # Parse expression with allowed functions
+            f = parse_expr(expr, local_dict={**symbol_mapping, **allowed_sympy_functions})
             
             # Calculate mean value
             values_dict = {var: v['mean'] for var, v in st.session_state.var_values.items() if var in defined_vars}
@@ -796,4 +821,3 @@ with st.sidebar:
 - Lineární funkci zapište jako `$y = k\cdot x + q$`
 - π zapište jako `\pi`
  """)
-
