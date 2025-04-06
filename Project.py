@@ -180,6 +180,7 @@ if st.session_state.df is not None:
                 - Pro převod jednotek zvolte odovídající faktor (násobek) a změňte název sloupce. Můžete použít i sčítání/odčítání. **Zachovejte formát jednotky v hranaté závorce.**
                 - Pokud chcete změnit název sloupce, zadejte faktor pro násobení 1 (resp. hodnotu k přičtení 0) a zadejte nové jméno sloupce. (Lze použít i pro úpravu na požadovaný formát hlavičky.)
                 - pro násobení číslem 10^n použijte zápis pomocí "e" (**např. 1e-19 = 10^-19**).
+                - Bacha, když převádíte víc sloupců, změny se nepropisují hned. Kontrolujete název sloupce, který měníte.
                 """)
     col1, col2, col3 = st.columns(3)
     
@@ -338,7 +339,7 @@ if st.session_state.df is not None:
 
     # Statistics section
     st.divider()
-    st.subheader("Střední hodnota a chyb přímého měření")
+    st.subheader("Střední hodnota a chyba přímého měření")
     st.markdown("""
                 - Program vypočítá střední hodnotu a chybu přímého měření pro zvolený sloupec.
                 - Pro výpočet je nutné, aby zápis jednotky byl ve tvaru **text[text2]**.
@@ -402,7 +403,7 @@ if st.session_state.df is not None:
 
     # Display statistics results
     if st.session_state.statistics_results:
-        st.subheader("Střdní hodnoty a průměry")
+        st.subheader("Střední hodnoty a chyby")
         for i, result in enumerate(st.session_state.statistics_results):
             col1, col2 = st.columns([4, 1])
             with col1:
@@ -755,6 +756,7 @@ with st.sidebar:
     
     with st.expander("Nápověda pro výpočty", expanded=True):
         st.markdown("""
+        - **!!!!!!!!!!!!Ve všech výpočtech pužívejte destinnou tečku místo desetinné čárky.!!!!!!!!!!!!**
         - Použijte `pi` pro π (např. `2*pi*r` pro obvod)
         - Použijte `ee` pro Eulerovo číslo
         - Použijte `**` pro umocnění (např. `r**2` pro r na druhou, `x**(1/3)` pro třetí odmocninu z x)
