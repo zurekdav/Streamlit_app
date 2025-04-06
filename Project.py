@@ -54,8 +54,8 @@ def add_to_history(new_df):
         # Add new state
         st.session_state.df_history.append(new_df.copy())
         st.session_state.current_state_index += 1
-        st.session_state.df = new_df.copy()  # Make sure to create a new copy
-        st.rerun()  # Force Streamlit to rerun with new data
+        st.session_state.df = new_df.copy()
+        st.rerun()
 
 # Initialize session state
 if 'initialized' not in st.session_state:
@@ -114,37 +114,42 @@ with tab2:
             df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
             df_from_clipboard = df_from_clipboard.apply(pd.to_numeric, errors='coerce')
             
-            # Set the data in session state
-            st.session_state.df = df_from_clipboard
+            # Reset session state
+            st.session_state.df = df_from_clipboard.copy()
             st.session_state.file_name = "pasted_data"
             st.session_state.statistics_results = []
-            st.session_state.df_history = [st.session_state.df.copy()]
+            st.session_state.indirect_results = []
+            st.session_state.custom_vars = []
+            st.session_state.var_values = {}
+            st.session_state.df_history = [df_from_clipboard.copy()]
             st.session_state.current_state_index = 0
-            
-            st.success("Data byla úspěšně načtena!")
+            st.rerun()
         except Exception as e:
             st.error(f"Chyba při načítání dat: {str(e)}")
 
 # Process uploaded file if any
 if uploaded_file is not None:
     try:
-        # Reset state only if file changed
-        if uploaded_file.name != st.session_state.get('file_name'):
-            if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(uploaded_file, engine='openpyxl')
-            else:
-                df = pd.read_csv(uploaded_file)
-            
-            # Normalize data
-            df = df.replace(',', '.', regex=True)
-            df = df.apply(pd.to_numeric, errors='coerce')
-            
-            # Update session_state
-            st.session_state.df = df.copy()  # Make sure to create a new copy
-            st.session_state.file_name = uploaded_file.name
-            st.session_state.df_history = [df.copy()]
-            st.session_state.current_state_index = 0
-            st.rerun()  # Force Streamlit to rerun with new data
+        # Always reset state when a new file is uploaded
+        if uploaded_file.name.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file, engine='openpyxl')
+        else:
+            df = pd.read_csv(uploaded_file)
+        
+        # Normalize data
+        df = df.replace(',', '.', regex=True)
+        df = df.apply(pd.to_numeric, errors='coerce')
+        
+        # Reset session state
+        st.session_state.df = df.copy()
+        st.session_state.file_name = uploaded_file.name
+        st.session_state.statistics_results = []
+        st.session_state.indirect_results = []
+        st.session_state.custom_vars = []
+        st.session_state.var_values = {}
+        st.session_state.df_history = [df.copy()]
+        st.session_state.current_state_index = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Chyba při čtení souboru: {str(e)}")
 
@@ -159,7 +164,7 @@ if st.session_state.df is not None:
         if st.session_state.current_state_index > 0:
             st.session_state.current_state_index -= 1
             st.session_state.df = st.session_state.df_history[st.session_state.current_state_index].copy()
-            st.rerun()  # Force Streamlit to rerun with new data
+            st.rerun()
     
     # Row and Column deletion sections
     st.subheader("🗑️ Vymazání řádků a sloupců")
