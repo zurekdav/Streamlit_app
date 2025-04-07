@@ -347,76 +347,80 @@ if st.session_state.df is not None:
                 - Můžete zadat chybu měřidla, která se zkombinuje se statistickou chybou.
                 """)
     
-    # Create columns for the input fields
-    col1, col2, col3 = st.columns(3)
+    # Create a container for the input fields
+    input_container = st.container()
     
-    with col1:
-        selected_stat_column = st.selectbox("Vyberte sloupec ke zpracování:", st.session_state.df.columns)
-    with col2:
-        instrument_error = st.text_input("Zadejte chybu měřidla (volitelné):", value="0.0")
-    with col3:
-        if st.button("Vyhodnotit"):
-            # Check for duplicate column names
-            base_columns = {}
-            duplicate_columns = {}
-            for col in st.session_state.df.columns:
-                base_name = col.split('[')[0].strip()
-                if base_name in base_columns:
-                    if base_name not in duplicate_columns:
-                        duplicate_columns[base_name] = [base_columns[base_name]]
-                    duplicate_columns[base_name].append(col)
-                else:
-                    base_columns[base_name] = col
-            
-            if duplicate_columns:
-                error_message = "❌ Nalezeny duplicitní názvy sloupců:\n"
-                for base_name, columns in duplicate_columns.items():
-                    error_message += f"- Sloupce {', '.join(columns)} mají stejný základní název '{base_name}'\n"
-                st.error(error_message)
-            else:
-                # Validate header format
-                header_row = st.session_state.df.columns
-                valid_format = all(
-                    pd.isna(cell) or (
-                        isinstance(cell, str) and 
-                        bool(re.match(r'^\s*[^\[\]]+\s*\[[^\[\]]+\]\s*$', cell))
-                    )
-                    for cell in header_row
-                )
-                if valid_format:
-                    values = st.session_state.df[selected_stat_column].dropna().to_numpy()
-                    n = len(values)
-                    mean = sum(values) / n
-                    std = np.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
-                    sme = std / np.sqrt(n)
-                    
-                    # Convert instrument error to float, handling both comma and dot
-                    try:
-                        inst_error = float(instrument_error.replace(',', '.'))
-                    except ValueError:
-                        st.error("❌ Neplatná hodnota chyby měřidla. Použijte číslo.")
-                        inst_error = 0.0
-                    
-                    # Calculate total error using the formula from the notebook
-                    total_error = np.sqrt(sme**2 + inst_error**2)
-                    
-                    result = {
-                        'column': selected_stat_column,
-                        'mean': mean,
-                        'statistical_error': sme,
-                        'instrument_error': inst_error,
-                        'total_error': total_error
-                    }
-                    
-                    existing_indices = [i for i, r in enumerate(st.session_state.statistics_results) 
-                                     if r['column'] == selected_stat_column]
-                    
-                    if existing_indices:
-                        st.session_state.statistics_results[existing_indices[0]] = result
+    with input_container:
+        # Create columns for the input fields
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            selected_stat_column = st.selectbox("Vyberte sloupec ke zpracování:", st.session_state.df.columns)
+        with col2:
+            instrument_error = st.text_input("Zadejte chybu měřidla (volitelné):", value="0.0")
+        with col3:
+            if st.button("Vyhodnotit"):
+                # Check for duplicate column names
+                base_columns = {}
+                duplicate_columns = {}
+                for col in st.session_state.df.columns:
+                    base_name = col.split('[')[0].strip()
+                    if base_name in base_columns:
+                        if base_name not in duplicate_columns:
+                            duplicate_columns[base_name] = [base_columns[base_name]]
+                        duplicate_columns[base_name].append(col)
                     else:
-                        st.session_state.statistics_results.append(result)
+                        base_columns[base_name] = col
+                
+                if duplicate_columns:
+                    error_message = "❌ Nalezeny duplicitní názvy sloupců:\n"
+                    for base_name, columns in duplicate_columns.items():
+                        error_message += f"- Sloupce {', '.join(columns)} mají stejný základní název '{base_name}'\n"
+                    st.error(error_message)
                 else:
-                    st.error("❌ Hlavička musí být ve formátu text[text2]. Příklad: T[s] nebo Time [seconds]")
+                    # Validate header format
+                    header_row = st.session_state.df.columns
+                    valid_format = all(
+                        pd.isna(cell) or (
+                            isinstance(cell, str) and 
+                            bool(re.match(r'^\s*[^\[\]]+\s*\[[^\[\]]+\]\s*$', cell))
+                        )
+                        for cell in header_row
+                    )
+                    if valid_format:
+                        values = st.session_state.df[selected_stat_column].dropna().to_numpy()
+                        n = len(values)
+                        mean = sum(values) / n
+                        std = np.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
+                        sme = std / np.sqrt(n)
+                        
+                        # Convert instrument error to float, handling both comma and dot
+                        try:
+                            inst_error = float(instrument_error.replace(',', '.'))
+                        except ValueError:
+                            st.error("❌ Neplatná hodnota chyby měřidla. Použijte číslo.")
+                            inst_error = 0.0
+                        
+                        # Calculate total error using the formula from the notebook
+                        total_error = np.sqrt(sme**2 + inst_error**2)
+                        
+                        result = {
+                            'column': selected_stat_column,
+                            'mean': mean,
+                            'statistical_error': sme,
+                            'instrument_error': inst_error,
+                            'total_error': total_error
+                        }
+                        
+                        existing_indices = [i for i, r in enumerate(st.session_state.statistics_results) 
+                                         if r['column'] == selected_stat_column]
+                        
+                        if existing_indices:
+                            st.session_state.statistics_results[existing_indices[0]] = result
+                        else:
+                            st.session_state.statistics_results.append(result)
+                    else:
+                        st.error("❌ Hlavička musí být ve formátu text[text2]. Příklad: T[s] nebo Time [seconds]")
 
     # Display statistics results
     if st.session_state.statistics_results:
