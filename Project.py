@@ -650,11 +650,25 @@ if all_vars:
                 }
         else:
             with col2:
-                custom_mean = st.number_input(f"Zadejte střední hodnotu pro {var}", key=f"mean_{var}")
-                custom_error = st.number_input(f"Zadejte chybu pro {var}", key=f"error_{var}")
+                custom_mean = st.text_input(f"Zadejte střední hodnotu pro {var}", key=f"mean_{var}")
+                custom_error = st.text_input(f"Zadejte chybu pro {var}", key=f"error_{var}")
+                
+                # Konverze textových vstupů na float s ošetřením chyb
+                try:
+                    mean_value = float(custom_mean.replace(',', '.')) if custom_mean else 0.0
+                except ValueError:
+                    st.error(f"❌ Neplatná hodnota pro střední hodnotu {var}. Použijte číslo.")
+                    mean_value = 0.0
+                
+                try:
+                    error_value = float(custom_error.replace(',', '.')) if custom_error else 0.0
+                except ValueError:
+                    st.error(f"❌ Neplatná hodnota pro chybu {var}. Použijte číslo.")
+                    error_value = 0.0
+                
                 st.session_state.var_values[var] = {
-                    'mean': custom_mean,
-                    'error': custom_error
+                    'mean': mean_value,
+                    'error': error_value
                 }
         
         if var in st.session_state.custom_vars:
