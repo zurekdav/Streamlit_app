@@ -344,12 +344,15 @@ if st.session_state.df is not None:
                 - Program vypočítá střední hodnotu a chybu přímého měření pro zvolený sloupec.
                 - Pro výpočet je nutné, aby zápis jednotky byl ve tvaru **text[text2]**.
                 - Příklad: **T[s]**
+                - Můžete zadat chybu měřidla, která se zkombinuje se statistickou chybou.
                 """)
-    stat_col1, stat_col2 = st.columns(2)
+    stat_col1, stat_col2, stat_col3 = st.columns(3)
 
     with stat_col1:
         selected_stat_column = st.selectbox("Vyberte sloupec ke zpracování:", st.session_state.df.columns)
     with stat_col2:
+        instrument_error = st.text_input("Zadejte chybu měřidla (volitelné):", value="0.0")
+    with stat_col3:
         if st.button("Vyhodnotit"):
             # Check for duplicate column names
             base_columns = {}
@@ -385,10 +388,22 @@ if st.session_state.df is not None:
                     std = np.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
                     sme = std / np.sqrt(n)
                     
+                    # Convert instrument error to float, handling both comma and dot
+                    try:
+                        inst_error = float(instrument_error.replace(',', '.'))
+                    except ValueError:
+                        st.error("❌ Neplatná hodnota chyby měřidla. Použijte číslo.")
+                        inst_error = 0.0
+                    
+                    # Calculate total error using the formula from the notebook
+                    total_error = np.sqrt(sme**2 + inst_error**2)
+                    
                     result = {
                         'column': selected_stat_column,
                         'mean': mean,
-                        'error': sme
+                        'statistical_error': sme,
+                        'instrument_error': inst_error,
+                        'total_error': total_error
                     }
                     
                     existing_indices = [i for i, r in enumerate(st.session_state.statistics_results) 
@@ -407,7 +422,10 @@ if st.session_state.df is not None:
         for i, result in enumerate(st.session_state.statistics_results):
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.write(f"{result['column']} = {result['mean']:.10f} ± {result['error']:.10f}")
+                st.write(f"{result['column']} = {result['mean']:.10f} ± {result['total_error']:.10f}")
+                if result['instrument_error'] > 0:
+                    st.write(f"Statistická chyba: ±{result['statistical_error']:.10f}")
+                    st.write(f"Chyba měřidla: ±{result['instrument_error']:.10f}")
             with col2:
                 if st.button("Odstranit", key=f"remove_{i}"):
                     st.session_state.statistics_results.pop(i)
