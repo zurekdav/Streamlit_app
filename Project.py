@@ -41,6 +41,8 @@ st.markdown("""
             - **V případě bezrozměrné veličiny stejně použijete hranatou závorku (např. exp(x) [-]). Hranatá závorka nesmí zůstat prázdná.**
             - Budete-li zapisovat jednotku jakkoli jinak, program **nebude fungovat**. (Např. zápis T (s) nebo T \s nebude fungovat.)
             - Pokud v zápisu veličiny používate čísla nebo matematické operace (např. 1/T, exp(x)...), dejte výraz do **kulaté závorky** (tedy např. **(1/T)[1/s]**).
+            - Tabulku si po úpravách můžete stáhnout jako CSV (najeďte myší na tabulku a v horním pravém rohu klikněte na tlačítko stáhnout.)
+            - Můžete zkopírovat oblast tabulky do Excelu (hlavičku kopírovat asi nejde).
             """)
 
 # Create tabs for file upload and paste data
@@ -436,6 +438,63 @@ if st.session_state.df is not None:
                 if st.button("Odstranit", key=f"remove_{i}"):
                     st.session_state.statistics_results.pop(i)
                     st.rerun()
+
+    # Weighted Average section
+    st.divider()
+    st.subheader("Vážený průměr")
+    st.markdown("""
+                - Tato sekce je užitečná, máte-li více nezávislých měření stejné veličiny.
+                - Vyberte sloupce obsahující hodnoty a jejich chyby pro výpočet váženého průměru.
+                - Program vypočítá vážený průměr a jeho chybu podle vzorce:
+                - $\\bar{x} = \\frac{\\sum_{i=1}^n \\frac{x_i}{\\sigma_i^2}}{\\sum_{i=1}^n \\frac{1}{\\sigma_i^2}}$
+                - $\\sigma_{\\bar{x}} = \\sqrt{\\frac{1}{\\sum_{i=1}^n \\frac{1}{\\sigma_i^2}}}$
+                """)
+    
+    if st.session_state.df is not None:
+        # Create columns for input fields
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            values_column = st.selectbox(
+                "Vyberte sloupec s hodnotami:",
+                st.session_state.df.columns,
+                help="Vyberte sloupec obsahující hodnoty pro výpočet váženého průměru"
+            )
+        
+        with col2:
+            errors_column = st.selectbox(
+                "Vyberte sloupec s chybami:",
+                st.session_state.df.columns,
+                help="Vyberte sloupec obsahující chyby hodnot"
+            )
+        
+        # Přidání tlačítka pro výpočet
+        if st.button("Vypočítat vážený průměr"):
+            if values_column and errors_column:
+                # Get the values and errors
+                values = st.session_state.df[values_column].dropna().values
+                errors = st.session_state.df[errors_column].dropna().values
+                
+                if len(values) > 0 and len(errors) > 0:
+                    if len(values) == len(errors):
+                        # Calculate weights
+                        weights = 1 / np.array(errors)**2
+                        
+                        # Calculate weighted average
+                        weighted_avg = np.sum(weights * np.array(values)) / np.sum(weights)
+                        
+                        # Calculate error of weighted average
+                        weighted_error = np.sqrt(1 / np.sum(weights))
+                        
+                        # Display results
+                        st.markdown("### Výsledky")
+                        st.write(f"Vážený průměr: {weighted_avg:.10f} ± {weighted_error:.10f}")
+                    else:
+                        st.error("Počet hodnot a chyb se neshoduje. Zkontrolujte, zda oba sloupce obsahují stejný počet hodnot.")
+                else:
+                    st.error("Vybrané sloupce neobsahují žádné hodnoty.")
+    else:
+        st.info("Nejprve nahrajte data pro výpočet váženého průměru.")
 
     # Data Fitting and Plotting section
     st.divider()
