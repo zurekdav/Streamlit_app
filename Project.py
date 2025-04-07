@@ -82,6 +82,7 @@ with tab2:
                 st.session_state.last_pasted_data = pasted_data
                 
                 st.success("Data byla úspěšně načtena!")
+                st.rerun()
         except Exception as e:
             st.error(f"Chyba při načítání dat: {str(e)}")
 
@@ -136,22 +137,26 @@ if st.session_state.df is not None:
                     - Zadejte index řádku, který chcete odstranit.
                     - **Pozor, první řádek má číslo 0.**
                     """)
-        row_to_delete = st.number_input("Zadejte index řádku k odstranění:", min_value=0, max_value=len(st.session_state.df)-1, value=0)
-        if st.button("Odstranit řádek"):
-            # When adding a new state, remove any states after the current one (if user had gone back in history)
-            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-            
-            # Apply the change
-            modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
-            
-            # Add the new state and update the index
-            st.session_state.df_history.append(modified_df.copy())
-            st.session_state.current_state_index += 1
-            st.session_state.df = modified_df
-            
-            data_display.dataframe(st.session_state.df)
-            st.success(f"Řádek {row_to_delete} byl odstraněn!")
+        # Kontrola, zda tabulka není prázdná
+        if len(st.session_state.df) > 0:
+            row_to_delete = st.number_input("Zadejte index řádku k odstranění:", min_value=0, max_value=len(st.session_state.df)-1, value=0)
+            if st.button("Odstranit řádek"):
+                # When adding a new state, remove any states after the current one (if user had gone back in history)
+                if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+                    st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+                
+                # Apply the change
+                modified_df = st.session_state.df.drop(row_to_delete).reset_index(drop=True)
+                
+                # Add the new state and update the index
+                st.session_state.df_history.append(modified_df.copy())
+                st.session_state.current_state_index += 1
+                st.session_state.df = modified_df
+                
+                data_display.dataframe(st.session_state.df)
+                st.success(f"Řádek {row_to_delete} byl odstraněn!")
+        else:
+            st.info("Tabulka je prázdná. Nejprve nahrajte data nebo přidejte řádky.")
     
     with col2:
         st.markdown("**Vymazání sloupce**")
@@ -159,22 +164,26 @@ if st.session_state.df is not None:
                     - Vyberte sloupec, který chcete odstranit.
                     - Zkontrolujte, že jste správně vybrali sloupec před jeho odstraněním.
                     """)
-        col_to_delete = st.selectbox("Zvolte sloupec k odstranění:", st.session_state.df.columns, key="delete_column")
-        if st.button("Odstranit sloupec"):
-            # When adding a new state, remove any states after the current one (if user had gone back in history)
-            if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-                st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-            
-            # Apply the change
-            modified_df = st.session_state.df.drop(columns=[col_to_delete])
-            
-            # Add the new state and update the index
-            st.session_state.df_history.append(modified_df.copy())
-            st.session_state.current_state_index += 1
-            st.session_state.df = modified_df
-            
-            data_display.dataframe(st.session_state.df)
-            st.success(f"Sloupec {col_to_delete} byl odstraněn!")
+        # Kontrola, zda tabulka není prázdná
+        if len(st.session_state.df.columns) > 0:
+            col_to_delete = st.selectbox("Zvolte sloupec k odstranění:", st.session_state.df.columns, key="delete_column")
+            if st.button("Odstranit sloupec"):
+                # When adding a new state, remove any states after the current one (if user had gone back in history)
+                if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+                    st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+                
+                # Apply the change
+                modified_df = st.session_state.df.drop(columns=[col_to_delete])
+                
+                # Add the new state and update the index
+                st.session_state.df_history.append(modified_df.copy())
+                st.session_state.current_state_index += 1
+                st.session_state.df = modified_df
+                
+                data_display.dataframe(st.session_state.df)
+                st.success(f"Sloupec {col_to_delete} byl odstraněn!")
+        else:
+            st.info("Tabulka je prázdná. Nejprve nahrajte data nebo přidejte sloupce.")
     
     # Column multiplication section
     st.subheader("Sekce pro převod jednotek a přejmenování sloupců")
@@ -982,4 +991,6 @@ with st.sidebar:
 - Odmocniny zapište pomocí `\sqrt{vyraz}`
 - Lineární funkci zapište jako `$y = k\cdot x + q$`
 - π zapište jako `\pi`
+- přirozený logaritmus zapište jako `\ln{x}`
+- Cokoli, co není proměnná, nesmí být kurzívou. Pro zadání běžného textu použijte `\\text{text}`.
  """)
