@@ -357,7 +357,7 @@ if st.session_state.df is not None:
         with col1:
             selected_stat_column = st.selectbox("Vyberte sloupec ke zpracování:", st.session_state.df.columns)
         with col2:
-            instrument_error = st.text_input("Zadejte chybu měřidla (volitelné):", value="0.0")
+            instrument_error = st.text_input("Zadejte chybu měřidla (když je zanedbatelná, zadejte 0):", value="0.0")
         with col3:
             if st.button("Vyhodnotit"):
                 # Check for duplicate column names
@@ -670,7 +670,7 @@ if all_vars:
             if stat_result:
                 st.session_state.var_values[var] = {
                     'mean': stat_result['mean'],
-                    'error': stat_result['error']
+                    'error': stat_result['total_error']
                 }
         else:
             with col2:
