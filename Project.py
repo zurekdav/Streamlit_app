@@ -164,69 +164,6 @@ if st.session_state.df is not None:
         # Add copy button
         st.button("Kopírovat do schránky", on_click=lambda: st.write("LaTeX kód byl zkopírován do schránky"))
     
-    # Zaokrouhlování hodnot
-    st.subheader("🔢 Zaokrouhlování hodnot")
-    col1, col2 = st.columns(2)
-    with col1:
-        selected_column = st.selectbox("Vyberte sloupec k zaokrouhlení:", st.session_state.df.columns, key="round_column")
-    with col2:
-        significant_digits = st.number_input("Počet platných míst:", min_value=1, max_value=10, value=2, key="significant_digits")
-    
-    if st.button("Zaokrouhlit hodnoty"):
-        # When adding a new state, remove any states after the current one
-        if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
-            st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
-        
-        # Create a copy of the dataframe
-        modified_df = st.session_state.df.copy()
-        
-        def round_to_significant_digits(x, n):
-            if pd.isna(x):
-                return x
-            
-            # Convert to float if it's a string
-            x = float(x)
-            
-            # Handle zero
-            if x == 0:
-                return "0"
-            
-            # Get the absolute value
-            abs_x = abs(x)
-            
-            # Calculate the order of magnitude
-            order = int(np.floor(np.log10(abs_x)))
-            
-            # Calculate the number of decimal places needed
-            decimal_places = n - 1 - order
-            
-            # Check if we need to round to n+1 digits
-            # Convert to string with more precision to check the next digit
-            str_val = f"{abs_x:.{decimal_places + 1}f}"
-            if len(str_val.replace('.', '').lstrip('0')) > n and str_val.replace('.', '').lstrip('0')[n] == '1':
-                n += 1
-                decimal_places = n - 1 - order
-            
-            # Format the number using .ng format
-            if decimal_places >= 0:
-                return f"{x:.{decimal_places}f}"
-            else:
-                # For numbers with no decimal places, use .0f
-                return f"{x:.0f}"
-        
-        # Apply rounding to all values
-        modified_df[selected_column] = modified_df[selected_column].apply(
-            lambda x: round_to_significant_digits(x, significant_digits)
-        )
-        
-        # Add the new state and update the index
-        st.session_state.df_history.append(modified_df.copy())
-        st.session_state.current_state_index += 1
-        st.session_state.df = modified_df
-        
-        data_display.dataframe(st.session_state.df)
-        st.success(f"Hodnoty ve sloupci {selected_column} byly zaokrouhleny na {significant_digits} platných míst!")
-    
     # Undo functionality - always show the button
     if st.button("↩️ Vrátit poslední změnu"):
         try:
