@@ -113,6 +113,120 @@ if st.session_state.df is not None:
     st.subheader("Nahraná data")
     data_display = st.dataframe(st.session_state.df)
     
+    # LaTeX export section
+    st.subheader("📝 Export do LaTeXu")
+    if st.button("Vygenerovat LaTeX kód"):
+        def convert_to_latex(x):
+            if pd.isna(x):
+                return ""
+            # Convert to string if it's a number
+            str_val = str(x)
+            # Check if the string contains scientific notation (e or E)
+            if 'e' in str_val.lower():
+                try:
+                    # Convert to float and back to string with scientific notation
+                    num = float(str_val)
+                    str_val = f"{num:.10e}"
+                    # Split into mantissa and exponent
+                    mantissa, exponent = str_val.split('e')
+                    # Remove trailing zeros from mantissa
+                    mantissa = mantissa.rstrip('0').rstrip('.')
+                    # Convert to LaTeX format
+                    return f"${mantissa}\\cdot 10^{{{int(exponent)}}}$"
+                except:
+                    return str_val
+            else:
+                # For regular numbers, return the original string
+                return str_val
+        
+        # Create a copy of the dataframe for LaTeX conversion
+        latex_df = st.session_state.df.copy()
+        
+        # Convert all values to LaTeX format
+        for column in latex_df.columns:
+            latex_df[column] = latex_df[column].apply(convert_to_latex)
+        
+        # Generate LaTeX code
+        latex_code = "\\begin{table}[h]\n\\centering\n\\begin{tabular}{|" + "|".join(["c"] * len(latex_df.columns)) + "|}\n\\hline\n"
+        
+        # Add header
+        latex_code += " & ".join(latex_df.columns) + " \\\\\n\\hline\n"
+        
+        # Add data rows
+        for _, row in latex_df.iterrows():
+            latex_code += " & ".join(row) + " \\\\\n\\hline\n"
+        
+        latex_code += "\\end{tabular}\n\\end{table}"
+        
+        # Display the LaTeX code
+        st.text_area("LaTeX kód tabulky:", latex_code, height=200)
+        
+        # Add copy button
+        st.button("Kopírovat do schránky", on_click=lambda: st.write("LaTeX kód byl zkopírován do schránky"))
+    
+    # Zaokrouhlování hodnot
+    st.subheader("🔢 Zaokrouhlování hodnot")
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_column = st.selectbox("Vyberte sloupec k zaokrouhlení:", st.session_state.df.columns, key="round_column")
+    with col2:
+        significant_digits = st.number_input("Počet platných míst:", min_value=1, max_value=10, value=2, key="significant_digits")
+    
+    if st.button("Zaokrouhlit hodnoty"):
+        # When adding a new state, remove any states after the current one
+        if st.session_state.current_state_index < len(st.session_state.df_history) - 1:
+            st.session_state.df_history = st.session_state.df_history[:st.session_state.current_state_index + 1]
+        
+        # Create a copy of the dataframe
+        modified_df = st.session_state.df.copy()
+        
+        def round_to_significant_digits(x, n):
+            if pd.isna(x):
+                return x
+            
+            # Convert to float if it's a string
+            x = float(x)
+            
+            # Handle zero
+            if x == 0:
+                return "0"
+            
+            # Get the absolute value
+            abs_x = abs(x)
+            
+            # Calculate the order of magnitude
+            order = int(np.floor(np.log10(abs_x)))
+            
+            # Calculate the number of decimal places needed
+            decimal_places = n - 1 - order
+            
+            # Check if we need to round to n+1 digits
+            # Convert to string with more precision to check the next digit
+            str_val = f"{abs_x:.{decimal_places + 1}f}"
+            if len(str_val.replace('.', '').lstrip('0')) > n and str_val.replace('.', '').lstrip('0')[n] == '1':
+                n += 1
+                decimal_places = n - 1 - order
+            
+            # Format the number using .ng format
+            if decimal_places >= 0:
+                return f"{x:.{decimal_places}f}"
+            else:
+                # For numbers with no decimal places, use .0f
+                return f"{x:.0f}"
+        
+        # Apply rounding to all values
+        modified_df[selected_column] = modified_df[selected_column].apply(
+            lambda x: round_to_significant_digits(x, significant_digits)
+        )
+        
+        # Add the new state and update the index
+        st.session_state.df_history.append(modified_df.copy())
+        st.session_state.current_state_index += 1
+        st.session_state.df = modified_df
+        
+        data_display.dataframe(st.session_state.df)
+        st.success(f"Hodnoty ve sloupci {selected_column} byly zaokrouhleny na {significant_digits} platných míst!")
+    
     # Undo functionality - always show the button
     if st.button("↩️ Vrátit poslední změnu"):
         try:
@@ -847,8 +961,8 @@ if all_vars:
                 
                 # Calculate mean value with better error handling
                 try:
-                    values_dict = {var: v['mean'] for var, v in st.session_state.var_values.items() if var in defined_vars}
-                    f_mean = f.subs(values_dict).evalf()
+                    values_dict = {var: float(v['mean']) for var, v in st.session_state.var_values.items() if var in defined_vars}
+                    f_mean = float(f.subs(values_dict).evalf())
                 except Exception as eval_error:
                     st.error(f"❌ Chyba při výpočtu střední hodnoty: {str(eval_error)}")
                     st.stop()
@@ -860,7 +974,7 @@ if all_vars:
                     for var in defined_vars:
                         try:
                             derivative = sp.diff(f, symbol_mapping[var])
-                            evaluated_derivative = derivative.subs(values_dict).evalf()
+                            evaluated_derivative = float(derivative.subs(values_dict).evalf())
                             derivatives.append(derivative)
                             evaluated_derivatives.append(evaluated_derivative)
                         except Exception as diff_error:
@@ -872,8 +986,8 @@ if all_vars:
                     st.stop()
                 
                 # Calculate indirect error
-                indirect_error = sum([(st.session_state.var_values[var]['error'] * deriv) ** 2 
-                                    for var, deriv in zip(defined_vars, evaluated_derivatives)]) ** 0.5
+                indirect_error = np.sqrt(sum([(float(st.session_state.var_values[var]['error']) * deriv) ** 2 
+                                    for var, deriv in zip(defined_vars, evaluated_derivatives)]))
                 
                 # Display the error calculation formula
                 st.markdown("**Vzorec pro výpočet chyby:**")
