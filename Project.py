@@ -483,8 +483,8 @@ if st.session_state.df is not None:
                     if valid_format:
                         values = st.session_state.df[selected_stat_column].dropna().to_numpy()
                         n = len(values)
-                        mean = sum(values) / n
-                        std = np.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
+                        mean = float(sum(values)) / float(n)
+                        std = np.sqrt(sum((float(x) - mean) ** 2 for x in values) / (n - 1))
                         sme = std / np.sqrt(n)
                         
                         # Convert instrument error to float, handling both comma and dot
