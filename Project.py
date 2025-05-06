@@ -7,6 +7,7 @@ import re
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from io import BytesIO, StringIO
+from decimal import Decimal
 
 st.set_page_config(page_title="Analýza měření", layout="wide")
 st.title("Analýza měření")
@@ -69,9 +70,14 @@ with tab2:
                     # If that fails, try with comma separator
                     df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=',', na_values=[''])
                 
-                # Convert to numeric and handle decimal points
+                # Replace decimal comma with dot
                 df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
-                df_from_clipboard = df_from_clipboard.apply(pd.to_numeric, errors='coerce')
+                
+                # Convert to numeric while preserving precision using Decimal
+                for col in df_from_clipboard.columns:
+                    df_from_clipboard[col] = df_from_clipboard[col].apply(
+                        lambda x: Decimal(str(x)) if pd.notnull(x) else x
+                    )
                 
                 # Set the data in session state
                 st.session_state.df = df_from_clipboard
@@ -109,9 +115,34 @@ if uploaded_file is not None:
 
 # Display data and editing options if we have data (either from file or clipboard)
 if st.session_state.df is not None:
-    # Display the data
+    # Display the data with full precision
     st.subheader("Nahraná data")
-    data_display = st.dataframe(st.session_state.df)
+    
+    # Analyze the number of decimal places in each column
+    column_config = {}
+    for col in st.session_state.df.columns:
+        # Find the maximum number of decimal places in the column
+        max_decimals = 0
+        for val in st.session_state.df[col]:
+            if pd.notnull(val):
+                # Convert to string and find decimal places
+                str_val = str(val)
+                if '.' in str_val:
+                    decimals = len(str_val.split('.')[1])
+                    max_decimals = max(max_decimals, decimals)
+        
+        # Set the format based on the maximum number of decimal places found
+        column_config[col] = st.column_config.NumberColumn(
+            col,
+            format=f"%.{max_decimals}f" if max_decimals > 0 else "%.0f"
+        )
+    
+    data_display = st.dataframe(
+        st.session_state.df,
+        use_container_width=True,
+        hide_index=True,
+        column_config=column_config
+    )
     
     # LaTeX export section
     st.subheader("📝 Export do LaTeXu")
