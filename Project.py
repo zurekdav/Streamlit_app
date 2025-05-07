@@ -601,6 +601,7 @@ if st.session_state.df is not None:
     # Data Fitting and Plotting section
     st.divider()
     st.subheader("📈 Fitování a grafické zobrazení dat")
+    st.markdown("**Funguje jen pro data nahraná ze souboru, nikoli ta zkopírována z schránky.**")
     st.markdown("Chcetel-li přidat na osu y chybové úečky, mějte chybu veličiny v samostatném sloupci.")
     
     # Column selection for plotting
