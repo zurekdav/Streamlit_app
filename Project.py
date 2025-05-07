@@ -63,21 +63,31 @@ with tab2:
             # Only process if the data is different from current state
             if pasted_data != st.session_state.get('last_pasted_data', ''):
                 # Try to read the data with different separators
-                try:
-                    # First try with tab separator
-                    df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep='\t', na_values=[''])
-                except:
-                    # If that fails, try with comma separator
-                    df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=',', na_values=[''])
+                df_from_clipboard = None
+                separators = ['\t', ',', ';', ' ']  # Try multiple separators
+                
+                for sep in separators:
+                    try:
+                        df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=sep, na_values=['', 'NA', 'N/A', 'nan', 'NaN'])
+                        if len(df_from_clipboard.columns) > 1:  # If we got multiple columns, this separator worked
+                            break
+                    except:
+                        continue
+                
+                if df_from_clipboard is None or len(df_from_clipboard.columns) <= 1:
+                    st.error("❌ Nepodařilo se načíst data. Zkontrolujte formát dat a zkuste to znovu.")
+                    st.stop()
                 
                 # Replace decimal comma with dot
                 df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
                 
-                # Convert to numeric while preserving precision using Decimal
+                # Convert to numeric while preserving precision
                 for col in df_from_clipboard.columns:
-                    df_from_clipboard[col] = df_from_clipboard[col].apply(
-                        lambda x: float(Decimal(str(x))) if pd.notnull(x) else x
-                    )
+                    try:
+                        df_from_clipboard[col] = pd.to_numeric(df_from_clipboard[col], errors='coerce')
+                    except:
+                        st.error(f"❌ Sloupec '{col}' obsahuje neplatná čísla. Zkontrolujte data.")
+                        st.stop()
                 
                 # Set the data in session state
                 st.session_state.df = df_from_clipboard
@@ -90,7 +100,8 @@ with tab2:
                 st.success("Data byla úspěšně načtena!")
                 st.rerun()
         except Exception as e:
-            st.error(f"Chyba při načítání dat: {str(e)}")
+            st.error(f"❌ Chyba při načítání dat: {str(e)}")
+            st.error("Zkontrolujte, zda data jsou ve správném formátu (oddělená tabulátorem nebo čárkou).")
 
 # Process uploaded file if any
 if uploaded_file is not None:
