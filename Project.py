@@ -76,7 +76,7 @@ with tab2:
                 # Convert to numeric while preserving precision using Decimal
                 for col in df_from_clipboard.columns:
                     df_from_clipboard[col] = df_from_clipboard[col].apply(
-                        lambda x: Decimal(str(x)) if pd.notnull(x) else x
+                        lambda x: float(Decimal(str(x))) if pd.notnull(x) else x
                     )
                 
                 # Set the data in session state
