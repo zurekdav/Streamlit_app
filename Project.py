@@ -62,32 +62,27 @@ with tab2:
         try:
             # Only process if the data is different from current state
             if pasted_data != st.session_state.get('last_pasted_data', ''):
-                # Try to read the data with different separators
-                df_from_clipboard = None
-                separators = ['\t', ',', ';', ' ']  # Try multiple separators
+                # Split the data into lines
+                lines = pasted_data.strip().split('\n')
                 
-                for sep in separators:
-                    try:
-                        df_from_clipboard = pd.read_csv(StringIO(pasted_data), sep=sep, na_values=['', 'NA', 'N/A', 'nan', 'NaN'])
-                        if len(df_from_clipboard.columns) > 1:  # If we got multiple columns, this separator worked
-                            break
-                    except:
-                        continue
+                # Get the header (first line)
+                header = lines[0].strip()
                 
-                if df_from_clipboard is None or len(df_from_clipboard.columns) <= 1:
-                    st.error("❌ Nepodařilo se načíst data. Zkontrolujte formát dat a zkuste to znovu.")
-                    st.stop()
+                # Get the data (remaining lines)
+                data_lines = [line.strip() for line in lines[1:] if line.strip()]
+                
+                # Create a DataFrame with a single column
+                df_from_clipboard = pd.DataFrame({header: data_lines})
                 
                 # Replace decimal comma with dot
                 df_from_clipboard = df_from_clipboard.replace(',', '.', regex=True)
                 
                 # Convert to numeric while preserving precision
-                for col in df_from_clipboard.columns:
-                    try:
-                        df_from_clipboard[col] = pd.to_numeric(df_from_clipboard[col], errors='coerce')
-                    except:
-                        st.error(f"❌ Sloupec '{col}' obsahuje neplatná čísla. Zkontrolujte data.")
-                        st.stop()
+                try:
+                    df_from_clipboard[header] = pd.to_numeric(df_from_clipboard[header], errors='coerce')
+                except:
+                    st.error(f"❌ Sloupec '{header}' obsahuje neplatná čísla. Zkontrolujte data.")
+                    st.stop()
                 
                 # Set the data in session state
                 st.session_state.df = df_from_clipboard
@@ -101,7 +96,7 @@ with tab2:
                 st.rerun()
         except Exception as e:
             st.error(f"❌ Chyba při načítání dat: {str(e)}")
-            st.error("Zkontrolujte, zda data jsou ve správném formátu (oddělená tabulátorem nebo čárkou).")
+            st.error("Zkontrolujte, zda data jsou ve správném formátu.")
 
 # Process uploaded file if any
 if uploaded_file is not None:
